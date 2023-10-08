@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	NEUTRAL      = 10
-	MAXUNITS     = 50
+	NEUTRAL      = "Neutral"
+	MAXUNITS     = 49
 	OCCUPIEDCITY = 20
 	TICK         = 1.74
 	MININT       = -1111
@@ -90,7 +90,6 @@ func main() {
 				myCities = append(myCities, c)
 			}
 		}
-
 		// sort my cities by max units
 		sort.SliceStable(myCities, func(i, j int) bool {
 			return myCities[i].units > myCities[j].units
@@ -99,14 +98,14 @@ func main() {
 
 		hisCities := make([]City, 0, cityN)
 		for _, c := range cities {
-			if c.ownerID != playerID && c.ownerID != "Neutral" {
+			if c.ownerID != playerID && c.ownerID != NEUTRAL {
 				hisCities = append(hisCities, c)
 			}
 		}
 
 		neutralCities := make([]City, 0, cityN)
 		for _, c := range cities {
-			if c.ownerID == "Neutral" {
+			if c.ownerID == NEUTRAL {
 				neutralCities = append(neutralCities, c)
 			}
 		}
@@ -116,11 +115,6 @@ func main() {
 		maxPrize := MININT
 		src, dest := coords{}, coords{}
 		for _, mc := range myCities {
-			// sort.SliceStable(cities, func(i, j int) bool {
-			// 	d1 := distance(mc.coords, cities[i].coords)
-			// 	d2 := distance(mc.coords, cities[j].coords)
-			// 	return d1 < d2
-			// })
 			for _, c := range cities {
 				if mc == c {
 					continue
@@ -133,11 +127,26 @@ func main() {
 				}
 			}
 		}
-		if maxPrize <= 0 && len(hisCities) == 1 && myCities[0].units > 10 {
+
+		if maxPrize == 0 && len(hisCities) == 1 && myCities[0].units > 10 {
 			dest = getNeutral(myCities[0], hisCities[0], neutralCities)
 			src = myCities[0].coords
-		} else if maxPrize == 0 {
+		} else if maxPrize <= 0 {
 			dest = coords{}
+		}
+		if myCities[0].units == MAXUNITS {
+			sort.SliceStable(neutralCities, func(i, j int) bool {
+				d1 := distance(myCities[0].coords, neutralCities[i].coords)
+				d2 := distance(myCities[0].coords, neutralCities[j].coords)
+				return d1 < d2
+			})
+			for _, city := range neutralCities {
+				if city.units < myCities[0].units {
+					src = myCities[0].coords
+					dest = city.coords
+					break
+				}
+			}
 		}
 		move(src, dest)
 	}
@@ -146,26 +155,25 @@ func main() {
 func getPrize(src, dest City, movements []Movement) int {
 	// prize := math.MinInt
 	prize := conquer(src, dest, movements)
+	fmt.Fprintln(os.Stderr, "PRIZE:", prize)
 	return prize
 }
 
 // case 1: if Neutral city 1st becomes his, then mine
 func conquer(src, dest City, movements []Movement) int {
 	dist := distance(src.coords, dest.coords)
+	fmt.Fprint(os.Stderr, "DISTANCE=", dist)
 	cityUnits1 := getCityUnits(src, dest, movements)
-	if cityUnits1 > 0 && dest.ownerID == "Neutral" {
-		return -10
-	}
 	if cityUnits1 > 0 { // CITY IS MINE / NEUTRAL or WILL BE MINE or MY / NEUTRAL CITY IS NOT UNDER ATTACK
 		return 0
 	}
 	// CITY IS HIS or WILL BE HIS or HIS CITY IS NOT UNDER ATTACK
 	m := Movement{toCity: dest.name, attackerID: src.ownerID, leftTicks: dist, units: src.units}
 	cityUnits2 := getCityUnits(src, dest, Insert(movements, m))
-	if cityUnits2 < 0 { // CAN'T DO ANYTHING
-		return 0
+	if cityUnits2 > 0 {
+		cityUnits2 += OCCUPIEDCITY - dist
 	}
-	cityUnits2 += OCCUPIEDCITY - dist
+	fmt.Fprint(os.Stderr, "CONQUER ")
 	return cityUnits2
 }
 
@@ -175,33 +183,20 @@ func getCityUnits(src, dest City, movements []Movement) int {
 	isNeutral := true
 	lastLeftTicks := 0
 	sign := 1
-	if dest.ownerID != src.ownerID && dest.ownerID != "Neutral" {
+	if dest.ownerID != src.ownerID && dest.ownerID != NEUTRAL {
 		sign = -1
 	}
 	cityUnits := sign * dest.units
 	for _, m := range movements {
 		if dest.name == m.toCity { // CITY IS UNDER ATTACK
 			cost := m.leftTicks - lastLeftTicks
-			if dest.ownerID == "Neutral" && isNeutral {
-				tmp := m.units - cityUnits
-				// if cityUnits < 10 {
-				// 	t := 10 - cityUnits - cost
-				// 	if cost <= 10-cityUnits {
-				// 		tmp = tmp - cost
-				// 	} else {
-				// 		cost = cost - t
-				// 		tmp = tmp - cost
-				// 	}
-				// 	//////////////////////xxxxxxxxx
-				// }
-				// tmp := m.units - cityUnits - cost
-				if tmp <= 0 { // not enough to conquer Neutral city
-					cityUnits = -tmp
-					continue
-				} else if m.attackerID == src.ownerID { // if ATTACKER is me
+			if dest.ownerID == NEUTRAL && isNeutral {
+				tmp := m.units - cityUnits       // hope all neutral city units is 10
+				if m.attackerID == src.ownerID { // if ATTACKER is me
 					cityUnits = tmp
 				} else { // attacker is him
 					cityUnits = -tmp
+					sign = -1
 				}
 				isNeutral = false
 				continue
@@ -212,7 +207,7 @@ func getCityUnits(src, dest City, movements []Movement) int {
 				cityUnits = -(m.units - cityUnits - sign*cost)
 			}
 		}
-		if cityUnits < 0 {
+		if cityUnits <= 0 {
 			sign = -1
 		} else {
 			sign = 1
@@ -243,7 +238,9 @@ func getNeutral(myCity, hisCity City, neutralCities []City) coords {
 
 // calculates the distance between src and dest coords
 func distance(src, dest coords) int {
-	res := math.Sqrt(math.Pow(float64(dest.x)-float64(src.x), 2) + math.Pow(float64(dest.y)-float64(src.y), 2)*1.0)
+	x1, y1 := src.x/100, src.y/100
+	x2, y2 := dest.x/100, dest.y/100
+	res := math.Sqrt(math.Pow(float64(x2)-float64(x1), 2) + math.Pow(float64(y2)-float64(y1), 2)*1.0)
 	return int(math.Round(res * TICK))
 }
 
