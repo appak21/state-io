@@ -121,13 +121,18 @@ func main() {
 				if prize > 0 && !isSafe(mc, c, hisCities) {
 					prize = 0
 				}
-				if maxPrize < prize {
+				if maxPrize <= prize {
 					maxPrize = prize
 					dest = c.coords
 					src = mc.coords
 				}
 			}
 			if mc.units == MAXUNITS-myCityN && maxPrize <= 0 {
+				sort.SliceStable(hisCities, func(i, j int) bool {
+					d1 := distance(mc.coords, hisCities[i].coords)
+					d2 := distance(mc.coords, hisCities[j].coords)
+					return d1 < d2
+				})
 				for _, city := range hisCities {
 					if city.units <= mc.units {
 						src = mc.coords
@@ -135,6 +140,7 @@ func main() {
 						break
 					}
 				}
+				maxPrize = 1
 			}
 		}
 
@@ -153,17 +159,21 @@ func main() {
 						break
 					}
 				}
+			} else {
+				dest = coords{}
 			}
 		}
-
 		move(src, dest)
 	}
 }
 
 func isSafe(src, dest City, hisCities []City) bool {
-	d := distance(src.coords, dest.coords) + 1
-	myCost := 2*d + 1
+	d := distance(src.coords, dest.coords)
+	myCost := 2*d - 1
 	for _, c := range hisCities {
+		if c == dest {
+			continue
+		}
 		d = distance(c.coords, src.coords) + 1
 		hisCost := 2 * d
 		if myCost > hisCost {
