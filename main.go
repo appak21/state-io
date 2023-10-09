@@ -155,14 +155,14 @@ func main() {
 func getPrize(src, dest City, movements []Movement) int {
 	// prize := math.MinInt
 	prize := conquer(src, dest, movements)
-	fmt.Fprintln(os.Stderr, "PRIZE:", prize)
+	fmt.Fprintln(os.Stderr, " PRIZE:", prize)
 	return prize
 }
 
 // case 1: if Neutral city 1st becomes his, then mine
 func conquer(src, dest City, movements []Movement) int {
-	dist := distance(src.coords, dest.coords)
-	fmt.Fprint(os.Stderr, "DISTANCE=", dist)
+	dist := distance(src.coords, dest.coords) + 1
+	fmt.Fprint(os.Stderr, src.coords, dest.coords, " DISTANCE=", dist)
 	cityUnits1 := getCityUnits(src, dest, movements)
 	if cityUnits1 > 0 { // CITY IS MINE / NEUTRAL or WILL BE MINE or MY / NEUTRAL CITY IS NOT UNDER ATTACK
 		return 0
@@ -173,7 +173,7 @@ func conquer(src, dest City, movements []Movement) int {
 	if cityUnits2 > 0 {
 		cityUnits2 += OCCUPIEDCITY - dist
 	}
-	fmt.Fprint(os.Stderr, "CONQUER ")
+	fmt.Fprint(os.Stderr, " CONQUER ")
 	return cityUnits2
 }
 
