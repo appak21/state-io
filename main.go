@@ -77,13 +77,9 @@ func main() {
 		var cityN, tick int
 		var playerID string
 		fmt.Scan(&cityN, &playerID, &tick)
-		fmt.Fprintf(os.Stderr, "cityN=%v, playerID=%v, tick=%v\n", cityN, playerID, tick)
-		// reading cities
 		cities := readCities(cityN)
-		// reading movements. Movements are already sorted by left time
 		movements := readMovements()
 		//-------------------PREPARING DATA-------------------------
-
 		myCities := make([]City, 0, cityN)
 		for _, c := range cities {
 			if c.ownerID == playerID {
@@ -94,7 +90,6 @@ func main() {
 		sort.SliceStable(myCities, func(i, j int) bool {
 			return myCities[i].units > myCities[j].units
 		})
-		fmt.Fprintln(os.Stderr, "Sorted my cities: ", myCities)
 
 		hisCities := make([]City, 0, cityN)
 		for _, c := range cities {
@@ -102,6 +97,10 @@ func main() {
 				hisCities = append(hisCities, c)
 			}
 		}
+		// sort his cities by max units
+		sort.SliceStable(hisCities, func(i, j int) bool {
+			return hisCities[i].units > hisCities[j].units
+		})
 
 		neutralCities := make([]City, 0, cityN)
 		for _, c := range cities {
@@ -109,9 +108,7 @@ func main() {
 				neutralCities = append(neutralCities, c)
 			}
 		}
-
 		//-------------------MAKING DECISION-------------------------
-
 		maxPrize := MININT
 		src, dest := coords{}, coords{}
 		for _, mc := range myCities {
@@ -126,23 +123,32 @@ func main() {
 					src = mc.coords
 				}
 			}
+			if mc.units == MAXUNITS && maxPrize <= 0 {
+				sort.SliceStable(hisCities, func(i, j int) bool {
+					d1 := distance(mc.coords, hisCities[i].coords)
+					d2 := distance(mc.coords, hisCities[j].coords)
+					return d1 < d2
+				})
+				for _, city := range hisCities {
+					if city.units <= mc.units {
+						src = mc.coords
+						dest = city.coords
+						break
+					}
+				}
+			}
 		}
 
-		if maxPrize == 0 && len(hisCities) == 1 && myCities[0].units > 10 {
-			dest = getNeutral(myCities[0], hisCities[0], neutralCities)
-			src = myCities[0].coords
-		} else if maxPrize <= 0 {
+		largestCity := myCities[0]
+		if maxPrize == 0 && len(hisCities) == 1 && largestCity.units > 10 {
+			dest = getNeutral(largestCity, hisCities[0], neutralCities)
+			src = largestCity.coords
+		} else if maxPrize <= 0 && largestCity.units != MAXUNITS {
 			dest = coords{}
-		}
-		if myCities[0].units == MAXUNITS {
-			sort.SliceStable(neutralCities, func(i, j int) bool {
-				d1 := distance(myCities[0].coords, neutralCities[i].coords)
-				d2 := distance(myCities[0].coords, neutralCities[j].coords)
-				return d1 < d2
-			})
+		} else if largestCity.units == MAXUNITS && len(hisCities) == 0 {
 			for _, city := range neutralCities {
-				if city.units < myCities[0].units {
-					src = myCities[0].coords
+				if city.units < largestCity.units {
+					src = largestCity.coords
 					dest = city.coords
 					break
 				}
@@ -153,16 +159,12 @@ func main() {
 }
 
 func getPrize(src, dest City, movements []Movement) int {
-	// prize := math.MinInt
 	prize := conquer(src, dest, movements)
-	fmt.Fprintln(os.Stderr, " PRIZE:", prize)
 	return prize
 }
 
-// case 1: if Neutral city 1st becomes his, then mine
 func conquer(src, dest City, movements []Movement) int {
 	dist := distance(src.coords, dest.coords) + 1
-	fmt.Fprint(os.Stderr, src.coords, dest.coords, " DISTANCE=", dist)
 	cityUnits1 := getCityUnits(src, dest, movements)
 	if cityUnits1 > 0 { // CITY IS MINE / NEUTRAL or WILL BE MINE or MY / NEUTRAL CITY IS NOT UNDER ATTACK
 		return 0
@@ -173,7 +175,6 @@ func conquer(src, dest City, movements []Movement) int {
 	if cityUnits2 > 0 {
 		cityUnits2 += OCCUPIEDCITY - dist
 	}
-	fmt.Fprint(os.Stderr, " CONQUER ")
 	return cityUnits2
 }
 
