@@ -86,32 +86,29 @@ func main() {
 		})
 
 		myCities := make([]City, 0, cityN)
+		hisCities := make([]City, 0, cityN)
+		neutralCities := make([]City, 0, cityN)
+
 		for _, c := range cities {
 			if c.ownerID == playerID {
 				myCities = append(myCities, c)
+			} else if c.ownerID == NEUTRAL {
+				neutralCities = append(neutralCities, c)
+			} else {
+				hisCities = append(hisCities, c)
 			}
 		}
 		// sort my cities by max units
 		sort.SliceStable(myCities, func(i, j int) bool {
 			return myCities[i].units > myCities[j].units
 		})
-		hisCities := make([]City, 0, cityN)
-		for _, c := range cities {
-			if c.ownerID != playerID && c.ownerID != NEUTRAL {
-				hisCities = append(hisCities, c)
-			}
-		}
 		// sort his cities by max units
 		sort.SliceStable(hisCities, func(i, j int) bool {
 			return hisCities[i].units > hisCities[j].units
 		})
-		neutralCities := make([]City, 0, cityN)
-		for _, c := range cities {
-			if c.ownerID == NEUTRAL {
-				neutralCities = append(neutralCities, c)
-			}
-		}
+
 		//-------------------MAKING DECISION-------------------------
+		minDist := 1000
 		maxPrize, time := MININT, 0
 		src, dest := coords{}, coords{}
 		for _, mc := range myCities {
@@ -140,45 +137,19 @@ func main() {
 			}
 
 			if maxPrize <= 0 {
-				sort.SliceStable(hisCities, func(i, j int) bool {
-					d1 := distance(mc.coords, hisCities[i].coords)
-					d2 := distance(mc.coords, hisCities[j].coords)
-					return d1 < d2
-				})
-				for _, city := range hisCities {
-					if city.units <= mc.units {
+				for i := 0; i < len(hisCities); i++ {
+					temp := distance(mc.coords, hisCities[i].coords)
+					if minDist > temp {
+						minDist = temp
 						src = mc.coords
-						dest = city.coords
-						break
+						dest = hisCities[i].coords
 					}
 				}
-				maxPrize = 1
 			}
 		}
-		if maxPrize <= 1 && len(hisCities) == 0 {
+		if maxPrize <= 0 && len(hisCities) == 0 {
 			dest = coords{}
 		}
-		/*
-			if maxPrize <= 0 {
-				largestCity := myCities[0]
-				if len(myCities)-len(hisCities) > 2 {
-					sort.SliceStable(neutralCities, func(i, j int) bool {
-						d1 := distance(largestCity.coords, neutralCities[i].coords)
-						d2 := distance(largestCity.coords, neutralCities[j].coords)
-						return d1 < d2
-					})
-					for _, city := range neutralCities {
-						if city.units < largestCity.units {
-							src = largestCity.coords
-							dest = city.coords
-							break
-						}
-					}
-				} else {
-					dest = coords{}
-				}
-			}
-		*/
 		move(src, dest)
 	}
 }
@@ -310,25 +281,6 @@ func getCityUnits(src, dest City, movements []Movement) int {
 		lastLeftTicks = m.leftTicks
 	}
 	return cityUnits
-}
-
-// returns the most optimal neutral city for myCity, only when opponent has only 1 city
-// that should be close to me, far from my opponent
-func getNeutral(myCity, hisCity City, neutralCities []City) coords {
-	if len(neutralCities) == 0 {
-		return coords{}
-	}
-	max := MININT
-	theCity := coords{}
-	for _, nc := range neutralCities {
-		myDist := distance(myCity.coords, nc.coords)
-		hisDist := distance(hisCity.coords, nc.coords)
-		if hisDist-myDist > max {
-			max = hisDist - myDist
-			theCity = nc.coords
-		}
-	}
-	return theCity
 }
 
 // calculates the distance between src and dest coords
