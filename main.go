@@ -42,7 +42,7 @@ func readCities(cityN int) []City {
 	for i := 0; i < cityN; i++ {
 		data := ""
 		fmt.Scan(&cities[i].ownerID, &cities[i].units, &cities[i].name, &cities[i].x, &cities[i].y, &data, &data)
-		fmt.Fprintf(os.Stderr, "city-%d, %v\n", i, cities[i])
+		// fmt.Fprintf(os.Stderr, "city-%d, %v\n", i, cities[i])
 	}
 	return cities
 }
@@ -78,8 +78,13 @@ func main() {
 		var playerID string
 		fmt.Scan(&cityN, &playerID, &tick)
 		cities := readCities(cityN)
+
 		movements := readMovements()
 		//-------------------PREPARING DATA-------------------------
+		sort.SliceStable(movements, func(i, j int) bool {
+			return movements[i].leftTicks < movements[j].leftTicks
+		})
+
 		myCities := make([]City, 0, cityN)
 		for _, c := range cities {
 			if c.ownerID == playerID {
@@ -91,7 +96,6 @@ func main() {
 		sort.SliceStable(myCities, func(i, j int) bool {
 			return myCities[i].units > myCities[j].units
 		})
-
 		hisCities := make([]City, 0, cityN)
 		for _, c := range cities {
 			if c.ownerID != playerID && c.ownerID != NEUTRAL {
@@ -102,7 +106,6 @@ func main() {
 		sort.SliceStable(hisCities, func(i, j int) bool {
 			return hisCities[i].units > hisCities[j].units
 		})
-
 		neutralCities := make([]City, 0, cityN)
 		for _, c := range cities {
 			if c.ownerID == NEUTRAL {
@@ -113,6 +116,9 @@ func main() {
 		maxPrize := MININT
 		src, dest := coords{}, coords{}
 		for _, mc := range myCities {
+			if !isSafeToLeave1(mc, movements) {
+				continue
+			}
 			for _, c := range cities {
 				if mc == c {
 					continue
@@ -146,7 +152,7 @@ func main() {
 
 		if maxPrize <= 0 {
 			largestCity := myCities[0]
-			if len(myCities)-len(hisCities) > 1 {
+			if len(myCities)-len(hisCities) > 2 {
 				sort.SliceStable(neutralCities, func(i, j int) bool {
 					d1 := distance(largestCity.coords, neutralCities[i].coords)
 					d2 := distance(largestCity.coords, neutralCities[j].coords)
@@ -183,8 +189,62 @@ func isSafe(src, dest City, hisCities []City) bool {
 	return true
 }
 
+func isSafeToLeave1(src City, movements []Movement) bool {
+	cityUnits := 0 //1
+	lastLeftTicks, sign := 0, 1
+	for _, m := range movements {
+		if src.name == m.toCity {
+			cost := m.leftTicks - lastLeftTicks
+			if cityUnits == MAXUNITS || cityUnits == -MAXUNITS {
+				cost = 0
+			}
+			if m.attackerID == src.ownerID { // ME
+				cityUnits = m.units + cityUnits + sign*cost
+			} else { // HIM
+				cityUnits = -(m.units - cityUnits - sign*cost)
+			}
+		}
+		if cityUnits < 0 {
+			sign = -1
+		} else if cityUnits > 0 {
+			sign = 1
+		}
+		lastLeftTicks = m.leftTicks
+	}
+	if cityUnits >= 0 {
+		return true
+	}
+	return !isSafeToLeave2(src, movements)
+}
+
+func isSafeToLeave2(src City, movements []Movement) bool {
+	cityUnits := src.units
+	lastLeftTicks, sign := 0, 1
+	for _, m := range movements {
+		if src.name == m.toCity {
+			cost := m.leftTicks - lastLeftTicks
+			if cityUnits == MAXUNITS || cityUnits == -MAXUNITS {
+				cost = 0
+			}
+			if m.attackerID == src.ownerID { // ME
+				cityUnits = m.units + cityUnits + sign*cost
+			} else { // HIM
+				cityUnits = -(m.units - cityUnits - sign*cost)
+			}
+		}
+		if cityUnits < 0 {
+			sign = -1
+		} else if cityUnits > 0 {
+			sign = 1
+		}
+		lastLeftTicks = m.leftTicks
+	}
+	return cityUnits >= 0
+}
+
 func conquer(src, dest City, movements []Movement) int {
 	dist := distance(src.coords, dest.coords) + 1
+	// fmt.Fprintln(os.Stderr, " DISTANCE ", dist-1, " from ", src.coords, " to ", dest.coords)
 	cityUnits1 := getCityUnits(src, dest, movements)
 	if cityUnits1 > 0 { // CITY IS MINE / NEUTRAL or WILL BE MINE or MY / NEUTRAL CITY IS NOT UNDER ATTACK
 		return 0
@@ -193,7 +253,7 @@ func conquer(src, dest City, movements []Movement) int {
 	m := Movement{toCity: dest.name, attackerID: src.ownerID, leftTicks: dist, units: src.units}
 	cityUnits2 := getCityUnits(src, dest, Insert(movements, m))
 	if cityUnits2 > 0 {
-		cityUnits2 += OCCUPIEDCITY - dist
+		cityUnits2 = OCCUPIEDCITY - dist
 	}
 	return cityUnits2
 }
