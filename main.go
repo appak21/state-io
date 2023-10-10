@@ -91,7 +91,6 @@ func main() {
 				myCities = append(myCities, c)
 			}
 		}
-		myCityN := len(myCities)
 		// sort my cities by max units
 		sort.SliceStable(myCities, func(i, j int) bool {
 			return myCities[i].units > myCities[j].units
@@ -113,27 +112,34 @@ func main() {
 			}
 		}
 		//-------------------MAKING DECISION-------------------------
-		maxPrize := MININT
+		maxPrize, time := MININT, 0
 		src, dest := coords{}, coords{}
 		for _, mc := range myCities {
-			if !isSafeToLeave1(mc, movements) {
-				continue
-			}
+
 			for _, c := range cities {
 				if mc == c {
 					continue
 				}
-				prize := conquer(mc, c, movements)
+				prize, mytime := conquer(mc, c, movements)
 				if prize > 0 && !isSafe(mc, c, hisCities) {
 					prize = 0
 				}
 				if maxPrize <= prize {
+					time = mytime
 					maxPrize = prize
 					dest = c.coords
 					src = mc.coords
 				}
 			}
-			if mc.units == MAXUNITS-myCityN && maxPrize <= 0 {
+
+			if ok, t := isSafeToLeave1(mc, movements); !ok {
+				if time > t {
+					maxPrize = 0
+					continue
+				}
+			}
+
+			if maxPrize <= 0 {
 				sort.SliceStable(hisCities, func(i, j int) bool {
 					d1 := distance(mc.coords, hisCities[i].coords)
 					d2 := distance(mc.coords, hisCities[j].coords)
@@ -149,26 +155,30 @@ func main() {
 				maxPrize = 1
 			}
 		}
-
-		if maxPrize <= 0 {
-			largestCity := myCities[0]
-			if len(myCities)-len(hisCities) > 2 {
-				sort.SliceStable(neutralCities, func(i, j int) bool {
-					d1 := distance(largestCity.coords, neutralCities[i].coords)
-					d2 := distance(largestCity.coords, neutralCities[j].coords)
-					return d1 < d2
-				})
-				for _, city := range neutralCities {
-					if city.units < largestCity.units {
-						src = largestCity.coords
-						dest = city.coords
-						break
-					}
-				}
-			} else {
-				dest = coords{}
-			}
+		if maxPrize <= 1 && len(hisCities) == 0 {
+			dest = coords{}
 		}
+		/*
+			if maxPrize <= 0 {
+				largestCity := myCities[0]
+				if len(myCities)-len(hisCities) > 2 {
+					sort.SliceStable(neutralCities, func(i, j int) bool {
+						d1 := distance(largestCity.coords, neutralCities[i].coords)
+						d2 := distance(largestCity.coords, neutralCities[j].coords)
+						return d1 < d2
+					})
+					for _, city := range neutralCities {
+						if city.units < largestCity.units {
+							src = largestCity.coords
+							dest = city.coords
+							break
+						}
+					}
+				} else {
+					dest = coords{}
+				}
+			}
+		*/
 		move(src, dest)
 	}
 }
@@ -182,15 +192,15 @@ func isSafe(src, dest City, hisCities []City) bool {
 		}
 		d = distance(c.coords, src.coords) + 1
 		hisCost := 2 * d
-		if myCost > hisCost {
+		if myCost > hisCost && c.units > d {
 			return false
 		}
 	}
 	return true
 }
 
-func isSafeToLeave1(src City, movements []Movement) bool {
-	cityUnits := 0 //1
+func isSafeToLeave1(src City, movements []Movement) (bool, int) {
+	cityUnits := 0
 	lastLeftTicks, sign := 0, 1
 	for _, m := range movements {
 		if src.name == m.toCity {
@@ -198,7 +208,7 @@ func isSafeToLeave1(src City, movements []Movement) bool {
 			if cityUnits == MAXUNITS || cityUnits == -MAXUNITS {
 				cost = 0
 			}
-			if m.attackerID == src.ownerID { // ME
+			if m.attackerID == src.ownerID { // PROTECTING
 				cityUnits = m.units + cityUnits + sign*cost
 			} else { // HIM
 				cityUnits = -(m.units - cityUnits - sign*cost)
@@ -212,9 +222,9 @@ func isSafeToLeave1(src City, movements []Movement) bool {
 		lastLeftTicks = m.leftTicks
 	}
 	if cityUnits >= 0 {
-		return true
+		return true, -1
 	}
-	return !isSafeToLeave2(src, movements)
+	return !isSafeToLeave2(src, movements), lastLeftTicks
 }
 
 func isSafeToLeave2(src City, movements []Movement) bool {
@@ -242,12 +252,12 @@ func isSafeToLeave2(src City, movements []Movement) bool {
 	return cityUnits >= 0
 }
 
-func conquer(src, dest City, movements []Movement) int {
+func conquer(src, dest City, movements []Movement) (int, int) {
 	dist := distance(src.coords, dest.coords) + 1
 	// fmt.Fprintln(os.Stderr, " DISTANCE ", dist-1, " from ", src.coords, " to ", dest.coords)
 	cityUnits1 := getCityUnits(src, dest, movements)
 	if cityUnits1 > 0 { // CITY IS MINE / NEUTRAL or WILL BE MINE or MY / NEUTRAL CITY IS NOT UNDER ATTACK
-		return 0
+		return 0, -1
 	}
 	// CITY IS HIS or WILL BE HIS or HIS CITY IS NOT UNDER ATTACK
 	m := Movement{toCity: dest.name, attackerID: src.ownerID, leftTicks: dist, units: src.units}
@@ -255,7 +265,7 @@ func conquer(src, dest City, movements []Movement) int {
 	if cityUnits2 > 0 {
 		cityUnits2 = OCCUPIEDCITY - dist
 	}
-	return cityUnits2
+	return cityUnits2, dist
 }
 
 // cityUnits is a positive num when city is mine, and negative for opponent's city
